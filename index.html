@@ -3,22 +3,25 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
   <title>먹는 가계부</title>
+
   <link rel="stylesheet" href="style.css" />
 </head>
 
 <body>
+
 <div class="app">
 
   <header class="top-header">
     <div>
       <div class="page-title">먹는 가계부</div>
-      <div class="user-email">먹은 칼로리 · 운동 · 월별 변화 기록</div>
+      <div class="user-email" id="userStatus">로그인하지 않음</div>
     </div>
 
     <div class="header-actions">
-      <button class="icon-btn" onclick="toggleTheme()">☀️</button>
-      <button class="logout-btn" onclick="resetAll()">초기화</button>
+      <button class="icon-btn" id="themeBtn">☀️</button>
+      <button class="logout-btn" id="loginBtn">구글 로그인</button>
     </div>
   </header>
 
@@ -29,23 +32,26 @@
       <input id="height" class="soft-input" type="number" placeholder="키 cm">
       <input id="weight" class="soft-input" type="number" placeholder="몸무게 kg">
       <input id="age" class="soft-input" type="number" placeholder="나이">
+
       <select id="gender" class="soft-input">
         <option value="male">남성</option>
         <option value="female">여성</option>
       </select>
     </div>
 
-    <button class="entry-save" onclick="saveProfile()">기초대사량 계산</button>
+    <button class="entry-save" id="profileSaveBtn">기초대사량 계산</button>
 
     <div class="summary-grid">
       <div class="summary-box">
         <span>기초대사량</span>
         <strong id="bmrText">-</strong>
       </div>
+
       <div class="summary-box">
         <span>오늘 섭취</span>
         <strong id="todayFood">0</strong>
       </div>
+
       <div class="summary-box">
         <span>오늘 결과</span>
         <strong id="todayBalance">0</strong>
@@ -57,10 +63,12 @@
 
     <section id="screen-food" class="screen active">
       <div class="page-subtitle">오늘 먹은 거</div>
+
       <div id="foodList" class="card"></div>
 
       <div class="card">
         <div class="card-title">기본 음식표</div>
+
         <div class="table-wrap">
           <table>
             <thead>
@@ -72,6 +80,7 @@
                 <th>지</th>
               </tr>
             </thead>
+
             <tbody id="foodPresetTable"></tbody>
           </table>
         </div>
@@ -80,10 +89,12 @@
 
     <section id="screen-exercise" class="screen">
       <div class="page-subtitle">오늘 운동</div>
+
       <div id="exerciseList" class="card"></div>
 
       <div class="card">
         <div class="card-title">기본 운동표</div>
+
         <div class="table-wrap">
           <table>
             <thead>
@@ -93,6 +104,7 @@
                 <th>소비 kcal</th>
               </tr>
             </thead>
+
             <tbody id="exercisePresetTable"></tbody>
           </table>
         </div>
@@ -101,9 +113,9 @@
 
     <section id="screen-month" class="screen">
       <div class="month-bar">
-        <button class="circle-btn" onclick="changeMonth(-1)">‹</button>
+        <button class="circle-btn" id="prevMonthBtn">‹</button>
         <div class="month-label" id="monthLabel"></div>
-        <button class="circle-btn" onclick="changeMonth(1)">›</button>
+        <button class="circle-btn" id="nextMonthBtn">›</button>
       </div>
 
       <div class="card">
@@ -126,32 +138,42 @@
   </main>
 </div>
 
-<button id="fab" class="fab" onclick="openEntry()">+</button>
+<button id="fab" class="fab">+</button>
 
 <nav class="bottom-nav">
-  <button class="tab-btn active" onclick="showScreen('food')">
-    <span>🍚</span><em>먹은 거</em>
+  <button class="tab-btn active" data-screen="food">
+    <span>🍚</span>
+    <em>먹은 거</em>
   </button>
-  <button class="tab-btn" onclick="showScreen('exercise')">
-    <span>🏃</span><em>운동</em>
+
+  <button class="tab-btn" data-screen="exercise">
+    <span>🏃</span>
+    <em>운동</em>
   </button>
-  <button class="tab-btn" onclick="showScreen('month')">
-    <span>📅</span><em>월별</em>
+
+  <button class="tab-btn" data-screen="month">
+    <span>📅</span>
+    <em>월별</em>
   </button>
-  <button class="tab-btn" onclick="showScreen('stat')">
-    <span>📊</span><em>통계</em>
+
+  <button class="tab-btn" data-screen="stat">
+    <span>📊</span>
+    <em>통계</em>
   </button>
 </nav>
 
-<div id="entryOverlay" class="entry-overlay hidden" onclick="closeEntry()"></div>
+<div id="entryOverlay" class="entry-overlay hidden"></div>
 
 <section id="entrySheet" class="entry-sheet hidden">
   <div class="sheet-handle"></div>
 
   <div class="entry-head">
     <h3 id="entryTitle">기록 추가</h3>
-    <button class="entry-close" onclick="closeEntry()">×</button>
+    <button class="entry-close" id="entryCloseBtn">×</button>
   </div>
+
+  <label class="field-label">날짜</label>
+  <input id="entryDate" class="soft-input" type="date">
 
   <label class="field-label" id="mealLabel">구분</label>
   <div id="mealGrid" class="category-grid"></div>
@@ -168,10 +190,11 @@
     <span>kcal</span>
   </div>
 
-  <button class="entry-save" onclick="saveEntry()">저장</button>
-  <button class="entry-cancel" onclick="closeEntry()">취소</button>
+  <button class="entry-save" id="entrySaveBtn">저장</button>
+  <button class="entry-cancel" id="entryCancelBtn">취소</button>
 </section>
 
-<script src="app.js"></script>
+<script type="module" src="app.js"></script>
+
 </body>
 </html>

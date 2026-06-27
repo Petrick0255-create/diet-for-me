@@ -82,6 +82,7 @@ body {
   color: var(--sub);
   font-size: 14px;
   font-weight: 850;
+  word-break: break-all;
 }
 
 .header-actions {

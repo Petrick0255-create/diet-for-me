@@ -1,3 +1,45 @@
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js";
+
+import {
+  getAuth,
+  GoogleAuthProvider,
+  signInWithPopup,
+  signOut,
+  onAuthStateChanged
+} from "https://www.gstatic.com/firebasejs/10.12.5/firebase-auth.js";
+
+import {
+  getFirestore,
+  doc,
+  setDoc,
+  onSnapshot
+} from "https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js";
+
+/* =========================
+   Firebase 설정
+   ========================= */
+
+const firebaseConfig = {
+  apiKey: "여기에_apiKey",
+  authDomain: "여기에_authDomain",
+  projectId: "여기에_projectId",
+  storageBucket: "여기에_storageBucket",
+  messagingSenderId: "여기에_messagingSenderId",
+  appId: "여기에_appId"
+};
+
+const fbApp = initializeApp(firebaseConfig);
+const auth = getAuth(fbApp);
+const db = getFirestore(fbApp);
+const provider = new GoogleAuthProvider();
+
+let currentUser = null;
+let unsubscribeSync = null;
+
+/* =========================
+   기본 데이터
+   ========================= */
+
 const foodPresets = [
   ["바나나", 105, 27, 1.3, 0.3],
   ["아보카도", 240, 13, 3, 22],
@@ -19,12 +61,21 @@ const meals = ["아침", "점심", "저녁", "간식", "야식"];
 
 let data = JSON.parse(localStorage.getItem("foodAccountData") || "{}");
 let profile = JSON.parse(localStorage.getItem("foodAccountProfile") || "{}");
+
 let currentScreen = "food";
 let selectedMeal = "아침";
 let viewDate = new Date();
 
+/* =========================
+   날짜 함수
+   ========================= */
+
 function today() {
-  return new Date().toISOString().slice(0, 10);
+  const now = new Date();
+  const y = now.getFullYear();
+  const m = String(now.getMonth() + 1).padStart(2, "0");
+  const d = String(now.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
 }
 
 function dateKey(y, m, d) {
@@ -38,13 +89,93 @@ function getDay(date = today()) {
       exercises: []
     };
   }
+
   return data[date];
 }
 
-function saveData() {
+/* =========================
+   저장 / 동기화
+   ========================= */
+
+async function saveData() {
   localStorage.setItem("foodAccountData", JSON.stringify(data));
+  localStorage.setItem("foodAccountProfile", JSON.stringify(profile));
+
+  if (currentUser) {
+    await setDoc(doc(db, "foodAccounts", currentUser.uid), {
+      data,
+      profile,
+      updatedAt: Date.now()
+    });
+  }
+
   render();
 }
+
+function startSync(user) {
+  if (unsubscribeSync) unsubscribeSync();
+
+  const ref = doc(db, "foodAccounts", user.uid);
+
+  unsubscribeSync = onSnapshot(ref, snapshot => {
+    if (!snapshot.exists()) {
+      setDoc(ref, {
+        data,
+        profile,
+        updatedAt: Date.now()
+      });
+      return;
+    }
+
+    const cloud = snapshot.data();
+
+    data = cloud.data || {};
+    profile = cloud.profile || {};
+
+    localStorage.setItem("foodAccountData", JSON.stringify(data));
+    localStorage.setItem("foodAccountProfile", JSON.stringify(profile));
+
+    loadProfile();
+    render();
+  });
+}
+
+/* =========================
+   로그인
+   ========================= */
+
+async function loginGoogle() {
+  await signInWithPopup(auth, provider);
+}
+
+async function logoutGoogle() {
+  await signOut(auth);
+}
+
+onAuthStateChanged(auth, user => {
+  currentUser = user;
+
+  const loginBtn = document.getElementById("loginBtn");
+  const userStatus = document.getElementById("userStatus");
+
+  if (user) {
+    loginBtn.textContent = "로그아웃";
+    userStatus.textContent = user.email || "구글 로그인됨";
+    startSync(user);
+  } else {
+    loginBtn.textContent = "구글 로그인";
+    userStatus.textContent = "로그인하지 않음";
+
+    if (unsubscribeSync) {
+      unsubscribeSync();
+      unsubscribeSync = null;
+    }
+  }
+});
+
+/* =========================
+   프로필 / 기초대사량
+   ========================= */
 
 function saveProfile() {
   const h = Number(document.getElementById("height").value);
@@ -73,8 +204,7 @@ function saveProfile() {
     bmr
   };
 
-  localStorage.setItem("foodAccountProfile", JSON.stringify(profile));
-  render();
+  saveData();
 }
 
 function loadProfile() {
@@ -86,8 +216,15 @@ function loadProfile() {
 
 function totals(date = today()) {
   const d = getDay(date);
-  const food = d.foods.reduce((sum, item) => sum + Number(item.kcal), 0);
-  const exercise = d.exercises.reduce((sum, item) => sum + Number(item.kcal), 0);
+
+  const food = d.foods.reduce((sum, item) => {
+    return sum + Number(item.kcal || 0);
+  }, 0);
+
+  const exercise = d.exercises.reduce((sum, item) => {
+    return sum + Number(item.kcal || 0);
+  }, 0);
+
   const bmr = Number(profile.bmr || 0);
   const balance = food - exercise - bmr;
 
@@ -98,6 +235,10 @@ function totals(date = today()) {
     balance
   };
 }
+
+/* =========================
+   화면 전환
+   ========================= */
 
 function showScreen(screen) {
   currentScreen = screen;
@@ -112,14 +253,7 @@ function showScreen(screen) {
     btn.classList.remove("active");
   });
 
-  const index = {
-    food: 0,
-    exercise: 1,
-    month: 2,
-    stat: 3
-  }[screen];
-
-  document.querySelectorAll(".tab-btn")[index].classList.add("active");
+  document.querySelector(`.tab-btn[data-screen="${screen}"]`).classList.add("active");
 
   document.getElementById("fab").style.display =
     screen === "food" || screen === "exercise" ? "block" : "none";
@@ -127,12 +261,17 @@ function showScreen(screen) {
   render();
 }
 
+/* =========================
+   입력창
+   ========================= */
+
 function openEntry() {
   selectedMeal = "아침";
 
   document.getElementById("entryOverlay").classList.remove("hidden");
   document.getElementById("entrySheet").classList.remove("hidden");
 
+  document.getElementById("entryDate").value = today();
   document.getElementById("entryName").value = "";
   document.getElementById("entryKcal").value = "";
   document.getElementById("entryTime").value = "";
@@ -140,16 +279,20 @@ function openEntry() {
   if (currentScreen === "food") {
     document.getElementById("entryTitle").textContent = "먹은 거 추가";
     document.getElementById("mealLabel").textContent = "구분";
+
     document.getElementById("timeLabel").classList.add("hidden");
     document.getElementById("entryTime").classList.add("hidden");
+
     renderMealChips();
   }
 
   if (currentScreen === "exercise") {
     document.getElementById("entryTitle").textContent = "운동 추가";
     document.getElementById("mealLabel").textContent = "운동";
+
     document.getElementById("timeLabel").classList.remove("hidden");
     document.getElementById("entryTime").classList.remove("hidden");
+
     document.getElementById("mealGrid").innerHTML = "";
   }
 }
@@ -163,21 +306,24 @@ function renderMealChips() {
   const grid = document.getElementById("mealGrid");
 
   grid.innerHTML = meals.map(meal => `
-    <button 
+    <button
       class="category-chip ${meal === selectedMeal ? "active" : ""}"
-      onclick="selectMeal('${meal}')"
+      data-meal="${meal}"
     >
       ${meal}
     </button>
   `).join("");
-}
 
-function selectMeal(meal) {
-  selectedMeal = meal;
-  renderMealChips();
+  document.querySelectorAll(".category-chip").forEach(btn => {
+    btn.addEventListener("click", () => {
+      selectedMeal = btn.dataset.meal;
+      renderMealChips();
+    });
+  });
 }
 
 function saveEntry() {
+  const date = document.getElementById("entryDate").value || today();
   const name = document.getElementById("entryName").value.trim();
   const kcal = Number(document.getElementById("entryKcal").value);
   const time = Number(document.getElementById("entryTime").value);
@@ -187,7 +333,7 @@ function saveEntry() {
     return;
   }
 
-  const d = getDay();
+  const d = getDay(date);
 
   if (currentScreen === "food") {
     d.foods.push({
@@ -235,9 +381,15 @@ function renderFoodList() {
         <div class="item-sub">섭취 기록</div>
       </div>
       <div class="item-money plus">${item.kcal} kcal</div>
-      <button class="more-btn" onclick="removeFood(${index})">×</button>
+      <button class="more-btn" data-food-index="${index}">×</button>
     </div>
   `).join("");
+
+  document.querySelectorAll("[data-food-index]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      removeFood(Number(btn.dataset.foodIndex));
+    });
+  });
 }
 
 function renderExerciseList() {
@@ -256,9 +408,15 @@ function renderExerciseList() {
         <div class="item-sub">${item.min || 0}분 운동</div>
       </div>
       <div class="item-money minus">-${item.kcal} kcal</div>
-      <button class="more-btn" onclick="removeExercise(${index})">×</button>
+      <button class="more-btn" data-exercise-index="${index}">×</button>
     </div>
   `).join("");
+
+  document.querySelectorAll("[data-exercise-index]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      removeExercise(Number(btn.dataset.exerciseIndex));
+    });
+  });
 }
 
 function renderPresetTables() {
@@ -312,7 +470,7 @@ function renderCalendar() {
     const cls = t.balance > 0 ? "day-plus" : "day-minus";
 
     html += `
-      <button class="calendar-day" onclick="showDayDetail('${key}')">
+      <button class="calendar-day" data-detail-date="${key}">
         <div class="day-num">${d}</div>
         <div class="day-money ${cls}">${sign}${t.balance}</div>
         <div class="day-money">${t.food}kcal</div>
@@ -321,6 +479,12 @@ function renderCalendar() {
   }
 
   document.getElementById("calendarGrid").innerHTML = html;
+
+  document.querySelectorAll("[data-detail-date]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      showDayDetail(btn.dataset.detailDate);
+    });
+  });
 }
 
 function showDayDetail(date) {
@@ -330,7 +494,9 @@ function showDayDetail(date) {
   document.getElementById("dayDetail").innerHTML = `
     <div class="stat-row">
       <span>${date}</span>
-      <strong class="${t.balance > 0 ? "minus" : "plus"}">${t.balance > 0 ? "+" : ""}${t.balance} kcal</strong>
+      <strong class="${t.balance > 0 ? "minus" : "plus"}">
+        ${t.balance > 0 ? "+" : ""}${t.balance} kcal
+      </strong>
     </div>
 
     <div class="stat-row">
@@ -357,6 +523,7 @@ function showDayDetail(date) {
           <div class="list-item">
             <div>
               <div class="item-main">${item.meal} · ${item.name}</div>
+              <div class="item-sub">섭취 기록</div>
             </div>
             <div class="item-money plus">${item.kcal} kcal</div>
             <div></div>
@@ -374,7 +541,7 @@ function showDayDetail(date) {
           <div class="list-item">
             <div>
               <div class="item-main">${item.name}</div>
-              <div class="item-sub">${item.min || 0}분</div>
+              <div class="item-sub">${item.min || 0}분 운동</div>
             </div>
             <div class="item-money minus">-${item.kcal} kcal</div>
             <div></div>
@@ -438,7 +605,9 @@ function renderStats() {
 
     <div class="stat-row">
       <span>이번 달 최종 결과</span>
-      <strong class="${balance > 0 ? "minus" : "plus"}">${balance > 0 ? "+" : ""}${balance} kcal</strong>
+      <strong class="${balance > 0 ? "minus" : "plus"}">
+        ${balance > 0 ? "+" : ""}${balance} kcal
+      </strong>
     </div>
   `;
 }
@@ -449,7 +618,7 @@ function toggleTheme() {
   const isLight = document.body.classList.contains("light");
   localStorage.setItem("foodAccountTheme", isLight ? "light" : "dark");
 
-  document.querySelector(".icon-btn").textContent = isLight ? "🌙" : "☀️";
+  document.getElementById("themeBtn").textContent = isLight ? "🌙" : "☀️";
 }
 
 function loadTheme() {
@@ -457,30 +626,14 @@ function loadTheme() {
 
   if (theme === "light") {
     document.body.classList.add("light");
-    document.querySelector(".icon-btn").textContent = "🌙";
+    document.getElementById("themeBtn").textContent = "🌙";
   } else {
-    document.querySelector(".icon-btn").textContent = "☀️";
+    document.getElementById("themeBtn").textContent = "☀️";
   }
 }
 
-function resetAll() {
-  if (!confirm("전체 기록을 삭제할까요?")) return;
-
-  localStorage.removeItem("foodAccountData");
-  localStorage.removeItem("foodAccountProfile");
-
-  data = {};
-  profile = {};
-
-  document.getElementById("height").value = "";
-  document.getElementById("weight").value = "";
-  document.getElementById("age").value = "";
-
-  render();
-}
-
 function render() {
-  document.getElementById("bmrText").textContent = profile.bmr ? `${profile.bmr}` : "-";
+  document.getElementById("bmrText").textContent = profile.bmr ? profile.bmr : "-";
 
   const t = totals();
 
@@ -495,7 +648,35 @@ function render() {
   renderStats();
 }
 
+function bindEvents() {
+  document.getElementById("themeBtn").addEventListener("click", toggleTheme);
+  document.getElementById("loginBtn").addEventListener("click", () => {
+    if (currentUser) {
+      logoutGoogle();
+    } else {
+      loginGoogle();
+    }
+  });
+
+  document.getElementById("profileSaveBtn").addEventListener("click", saveProfile);
+  document.getElementById("fab").addEventListener("click", openEntry);
+
+  document.getElementById("entryOverlay").addEventListener("click", closeEntry);
+  document.getElementById("entryCloseBtn").addEventListener("click", closeEntry);
+  document.getElementById("entryCancelBtn").addEventListener("click", closeEntry);
+  document.getElementById("entrySaveBtn").addEventListener("click", saveEntry);
+
+  document.getElementById("prevMonthBtn").addEventListener("click", () => changeMonth(-1));
+  document.getElementById("nextMonthBtn").addEventListener("click", () => changeMonth(1));
+
+  document.querySelectorAll(".tab-btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+      showScreen(btn.dataset.screen);
+    });
+  });
+}
+
+bindEvents();
 loadTheme();
 loadProfile();
 render();
-

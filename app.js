@@ -145,7 +145,12 @@ function startSync(user) {
    ========================= */
 
 async function loginGoogle() {
-  await signInWithPopup(auth, provider);
+  try {
+    await signInWithPopup(auth, provider);
+  } catch (error) {
+    console.error(error);
+    alert(error.code + "\n\n" + error.message);
+  }
 }
 
 async function logoutGoogle() {

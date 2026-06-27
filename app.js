@@ -495,30 +495,6 @@ function render() {
   renderStats();
 }
 
-function saveProfile() {
-  const h = Number(document.getElementById("height").value);
-  const w = Number(document.getElementById("weight").value);
-  const a = Number(document.getElementById("age").value);
-  const g = document.getElementById("gender").value;
-
-  if (!h || !w || !a) {
-    alert("키, 몸무게, 나이를 입력하세요.");
-    return;
-  }
-
-  let bmr;
-
-  if (g === "male") {
-    bmr = Math.round(10 * w + 6.25 * h - 5 * a + 5);
-  } else {
-    bmr = Math.round(10 * w + 6.25 * h - 5 * a - 161);
-  }
-
-  localStorage.setItem("bmr", bmr);
-
-  document.getElementById("bmrText").textContent = bmr;
-}
-
 loadTheme();
 loadProfile();
 render();

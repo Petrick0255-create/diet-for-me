@@ -495,10 +495,6 @@ function render() {
   renderStats();
 }
 
-loadTheme();
-loadProfile();
-render();
-
 function saveProfile() {
   const h = Number(document.getElementById("height").value);
   const w = Number(document.getElementById("weight").value);
@@ -522,3 +518,8 @@ function saveProfile() {
 
   document.getElementById("bmrText").textContent = bmr;
 }
+
+loadTheme();
+loadProfile();
+render();
+

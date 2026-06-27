@@ -15,10 +15,7 @@ import {
   onSnapshot
 } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js";
 
-/* =========================
-   Firebase 설정
-   ========================= */
-
+/* Firebase 설정 */
 const firebaseConfig = {
   apiKey: "AIzaSyBwAA3jUPVQMMR61QSAM4-z7G24u4HrAT8",
   authDomain: "diet-for-me-a8b33.firebaseapp.com",
@@ -35,10 +32,6 @@ const provider = new GoogleAuthProvider();
 
 let currentUser = null;
 let unsubscribeSync = null;
-
-/* =========================
-   기본 데이터
-   ========================= */
 
 const foodPresets = [
   ["바나나", 105, 27, 1.3, 0.3],
@@ -66,9 +59,7 @@ let currentScreen = "food";
 let selectedMeal = "아침";
 let viewDate = new Date();
 
-/* =========================
-   날짜 함수
-   ========================= */
+let editMode = null;
 
 function today() {
   const now = new Date();
@@ -92,10 +83,6 @@ function getDay(date = today()) {
 
   return data[date];
 }
-
-/* =========================
-   저장 / 동기화
-   ========================= */
 
 async function saveData() {
   localStorage.setItem("foodAccountData", JSON.stringify(data));
@@ -140,10 +127,6 @@ function startSync(user) {
   });
 }
 
-/* =========================
-   로그인
-   ========================= */
-
 async function loginGoogle() {
   try {
     await signInWithPopup(auth, provider);
@@ -177,10 +160,6 @@ onAuthStateChanged(auth, user => {
     }
   }
 });
-
-/* =========================
-   프로필 / 기초대사량
-   ========================= */
 
 function saveProfile() {
   const h = Number(document.getElementById("height").value);
@@ -219,6 +198,31 @@ function loadProfile() {
   if (profile.gender) document.getElementById("gender").value = profile.gender;
 }
 
+function updateProfileCard() {
+  const card = document.getElementById("profileCard");
+  const inputs = card.querySelector(".form-grid");
+  const saveBtn = document.getElementById("profileSaveBtn");
+  const editBtn = document.getElementById("editProfileBtn");
+
+  if (profile.bmr) {
+    inputs.classList.add("hidden");
+    saveBtn.classList.add("hidden");
+    editBtn.classList.remove("hidden");
+  } else {
+    inputs.classList.remove("hidden");
+    saveBtn.classList.remove("hidden");
+    editBtn.classList.add("hidden");
+  }
+}
+
+function showProfileEdit() {
+  const card = document.getElementById("profileCard");
+
+  card.querySelector(".form-grid").classList.remove("hidden");
+  document.getElementById("profileSaveBtn").classList.remove("hidden");
+  document.getElementById("editProfileBtn").classList.add("hidden");
+}
+
 function totals(date = today()) {
   const d = getDay(date);
 
@@ -241,10 +245,6 @@ function totals(date = today()) {
   };
 }
 
-/* =========================
-   화면 전환
-   ========================= */
-
 function showScreen(screen) {
   currentScreen = screen;
 
@@ -266,11 +266,8 @@ function showScreen(screen) {
   render();
 }
 
-/* =========================
-   입력창
-   ========================= */
-
 function openEntry() {
+  editMode = null;
   selectedMeal = "아침";
 
   document.getElementById("entryOverlay").classList.remove("hidden");
@@ -305,6 +302,7 @@ function openEntry() {
 function closeEntry() {
   document.getElementById("entryOverlay").classList.add("hidden");
   document.getElementById("entrySheet").classList.add("hidden");
+  editMode = null;
 }
 
 function renderMealChips() {
@@ -327,6 +325,58 @@ function renderMealChips() {
   });
 }
 
+function editFood(index) {
+  const item = getDay().foods[index];
+
+  editMode = {
+    type: "food",
+    index,
+    originalDate: today()
+  };
+
+  currentScreen = "food";
+  selectedMeal = item.meal;
+
+  document.getElementById("entryOverlay").classList.remove("hidden");
+  document.getElementById("entrySheet").classList.remove("hidden");
+
+  document.getElementById("entryTitle").textContent = "먹은 거 수정";
+  document.getElementById("entryDate").value = today();
+  document.getElementById("entryName").value = item.name;
+  document.getElementById("entryKcal").value = item.kcal;
+  document.getElementById("entryTime").value = "";
+
+  document.getElementById("timeLabel").classList.add("hidden");
+  document.getElementById("entryTime").classList.add("hidden");
+
+  renderMealChips();
+}
+
+function editExercise(index) {
+  const item = getDay().exercises[index];
+
+  editMode = {
+    type: "exercise",
+    index,
+    originalDate: today()
+  };
+
+  currentScreen = "exercise";
+
+  document.getElementById("entryOverlay").classList.remove("hidden");
+  document.getElementById("entrySheet").classList.remove("hidden");
+
+  document.getElementById("entryTitle").textContent = "운동 수정";
+  document.getElementById("entryDate").value = today();
+  document.getElementById("entryName").value = item.name;
+  document.getElementById("entryKcal").value = item.kcal;
+  document.getElementById("entryTime").value = item.min || 0;
+
+  document.getElementById("timeLabel").classList.remove("hidden");
+  document.getElementById("entryTime").classList.remove("hidden");
+  document.getElementById("mealGrid").innerHTML = "";
+}
+
 function saveEntry() {
   const date = document.getElementById("entryDate").value || today();
   const name = document.getElementById("entryName").value.trim();
@@ -340,20 +390,40 @@ function saveEntry() {
 
   const d = getDay(date);
 
-  if (currentScreen === "food") {
-    d.foods.push({
-      meal: selectedMeal,
-      name,
-      kcal
-    });
-  }
+  if (editMode) {
+    if (editMode.type === "food") {
+      d.foods[editMode.index] = {
+        meal: selectedMeal,
+        name,
+        kcal
+      };
+    }
 
-  if (currentScreen === "exercise") {
-    d.exercises.push({
-      name,
-      min: time || 0,
-      kcal
-    });
+    if (editMode.type === "exercise") {
+      d.exercises[editMode.index] = {
+        name,
+        min: time || 0,
+        kcal
+      };
+    }
+
+    editMode = null;
+  } else {
+    if (currentScreen === "food") {
+      d.foods.push({
+        meal: selectedMeal,
+        name,
+        kcal
+      });
+    }
+
+    if (currentScreen === "exercise") {
+      d.exercises.push({
+        name,
+        min: time || 0,
+        kcal
+      });
+    }
   }
 
   closeEntry();
@@ -361,11 +431,13 @@ function saveEntry() {
 }
 
 function removeFood(index) {
+  if (!confirm("정말 삭제할까요?")) return;
   getDay().foods.splice(index, 1);
   saveData();
 }
 
 function removeExercise(index) {
+  if (!confirm("정말 삭제할까요?")) return;
   getDay().exercises.splice(index, 1);
   saveData();
 }
@@ -386,13 +458,17 @@ function renderFoodList() {
         <div class="item-sub">섭취 기록</div>
       </div>
       <div class="item-money plus">${item.kcal} kcal</div>
-      <button class="more-btn" data-food-index="${index}">×</button>
+      <button class="more-btn" data-food-menu="${index}">⋯</button>
     </div>
   `).join("");
 
-  document.querySelectorAll("[data-food-index]").forEach(btn => {
+  document.querySelectorAll("[data-food-menu]").forEach(btn => {
     btn.addEventListener("click", () => {
-      removeFood(Number(btn.dataset.foodIndex));
+      const index = Number(btn.dataset.foodMenu);
+      const action = prompt("수정은 1, 삭제는 2를 입력하세요.", "1");
+
+      if (action === "1") editFood(index);
+      if (action === "2") removeFood(index);
     });
   });
 }
@@ -413,13 +489,17 @@ function renderExerciseList() {
         <div class="item-sub">${item.min || 0}분 운동</div>
       </div>
       <div class="item-money minus">-${item.kcal} kcal</div>
-      <button class="more-btn" data-exercise-index="${index}">×</button>
+      <button class="more-btn" data-exercise-menu="${index}">⋯</button>
     </div>
   `).join("");
 
-  document.querySelectorAll("[data-exercise-index]").forEach(btn => {
+  document.querySelectorAll("[data-exercise-menu]").forEach(btn => {
     btn.addEventListener("click", () => {
-      removeExercise(Number(btn.dataset.exerciseIndex));
+      const index = Number(btn.dataset.exerciseMenu);
+      const action = prompt("수정은 1, 삭제는 2를 입력하세요.", "1");
+
+      if (action === "1") editExercise(index);
+      if (action === "2") removeExercise(index);
     });
   });
 }
@@ -651,19 +731,20 @@ function render() {
   renderPresetTables();
   renderCalendar();
   renderStats();
+  updateProfileCard();
 }
 
 function bindEvents() {
   document.getElementById("themeBtn").addEventListener("click", toggleTheme);
+
   document.getElementById("loginBtn").addEventListener("click", () => {
-    if (currentUser) {
-      logoutGoogle();
-    } else {
-      loginGoogle();
-    }
+    if (currentUser) logoutGoogle();
+    else loginGoogle();
   });
 
   document.getElementById("profileSaveBtn").addEventListener("click", saveProfile);
+  document.getElementById("editProfileBtn").addEventListener("click", showProfileEdit);
+
   document.getElementById("fab").addEventListener("click", openEntry);
 
   document.getElementById("entryOverlay").addEventListener("click", closeEntry);

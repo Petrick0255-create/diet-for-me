@@ -20,12 +20,12 @@ import {
    ========================= */
 
 const firebaseConfig = {
-  apiKey: "여기에_apiKey",
-  authDomain: "여기에_authDomain",
-  projectId: "여기에_projectId",
-  storageBucket: "여기에_storageBucket",
-  messagingSenderId: "여기에_messagingSenderId",
-  appId: "여기에_appId"
+  apiKey: "AIzaSyBwAA3jUPVQMMR61QSAM4-z7G24u4HrAT8",
+  authDomain: "diet-for-me-a8b33.firebaseapp.com",
+  projectId: "diet-for-me-a8b33",
+  storageBucket: "diet-for-me-a8b33.firebasestorage.app",
+  messagingSenderId: "766739395332",
+  appId: "1:766739395332:web:624056073881ecb80bd651"
 };
 
 const fbApp = initializeApp(firebaseConfig);

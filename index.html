@@ -6,43 +6,180 @@
   <title>먹는 가계부</title>
   <link rel="stylesheet" href="style.css" />
 </head>
-
 <body>
-<div class="app">
 
+<div class="app">
   <header class="top-header">
     <div>
       <div class="page-title">먹는 가계부</div>
       <div class="user-email" id="userStatus">로그인하지 않음</div>
     </div>
-
     <div class="header-actions">
-      <button class="icon-btn" id="themeBtn">☀️</button>
-      <button class="logout-btn" id="loginBtn">구글 로그인</button>
+      <button id="themeBtn" class="icon-btn">☀️</button>
+      <button id="loginBtn" class="logout-btn">구글 로그인</button>
     </div>
   </header>
 
-  <section id="screen-food" class="screen active">
+  <section id="tab-food" class="screen active">
     <div class="hero-card">
       <div class="hero-label">오늘 결과</div>
-      <div class="hero-value" id="todayBalance">0 kcal</div>
-      <div class="hero-sub" id="todaySummary">섭취 0 · 운동 0 · 기준 0</div>
+      <div id="todayBalance" class="hero-value">0 kcal</div>
+      <div id="todaySummary" class="hero-sub">섭취 0 · 운동 0 · 기준 0</div>
     </div>
 
     <div class="page-subtitle">먹은 거</div>
     <div id="foodList" class="card"></div>
   </section>
 
-  <section id="screen-exercise" class="screen">
+  <section id="tab-exercise" class="screen">
     <div class="page-subtitle">운동</div>
     <div id="exerciseList" class="card"></div>
   </section>
 
-  <section id="screen-month" class="screen">
+  <section id="tab-month" class="screen">
     <div class="month-bar">
-      <button class="circle-btn" id="prevMonthBtn">‹</button>
-      <div class="month-label" id="monthLabel"></div>
-      <button class="circle-btn" id="nextMonthBtn">›</button>
+      <button id="prevMonthBtn" class="circle-btn">‹</button>
+      <div id="monthLabel" class="month-label"></div>
+      <button id="nextMonthBtn" class="circle-btn">›</button>
     </div>
 
-    <div class="card
+    <div class="card">
+      <div id="calendarGrid"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">선택한 날짜 상세</div>
+      <div id="dayDetail" class="empty">날짜를 누르면 상세 기록이 나옵니다.</div>
+    </div>
+  </section>
+
+  <section id="tab-stat" class="screen">
+    <div class="page-subtitle">통계</div>
+
+    <div class="card">
+      <label class="field-label">통계 시작일</label>
+      <input id="statStartDate" class="soft-input" type="date" />
+      <button id="saveStatStartBtn" class="entry-save">시작일 적용</button>
+    </div>
+
+    <div class="card">
+      <div id="statResult"></div>
+    </div>
+  </section>
+
+  <section id="tab-info" class="screen">
+    <div class="page-subtitle">정보</div>
+
+    <div class="card">
+      <div class="card-title">내 대사량 설정</div>
+
+      <div class="form-grid">
+        <input id="height" class="soft-input" type="number" placeholder="키 cm" />
+        <input id="weight" class="soft-input" type="number" placeholder="몸무게 kg" />
+        <input id="age" class="soft-input" type="number" placeholder="나이" />
+        <select id="gender" class="soft-input">
+          <option value="male">남성</option>
+          <option value="female">여성</option>
+        </select>
+      </div>
+
+      <button id="calcBmrBtn" class="entry-save">기초대사량 계산</button>
+
+      <label class="field-label">일일 대사량 직접 입력</label>
+      <input id="dailyCalorieInput" class="soft-input" type="number" placeholder="예: 2400" />
+      <button id="saveDailyBtn" class="entry-save">일일 대사량 저장</button>
+
+      <div class="summary-grid">
+        <div class="summary-box">
+          <span>기초대사량</span>
+          <strong id="bmrText">-</strong>
+        </div>
+        <div class="summary-box">
+          <span>일일 대사량</span>
+          <strong id="dailyText">-</strong>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">자주 먹는 품목</div>
+      <button id="addPresetBtn" class="entry-save">+ 품목 추가</button>
+      <div id="presetList"></div>
+    </div>
+  </section>
+</div>
+
+<button id="fab" class="fab">+</button>
+
+<nav class="bottom-nav">
+  <button class="tab-btn active" data-tab="food"><span>🍚</span><em>먹은 거</em></button>
+  <button class="tab-btn" data-tab="exercise"><span>🏃</span><em>운동</em></button>
+  <button class="tab-btn" data-tab="month"><span>📅</span><em>월별</em></button>
+  <button class="tab-btn" data-tab="stat"><span>📊</span><em>통계</em></button>
+  <button class="tab-btn" data-tab="info"><span>⚙️</span><em>정보</em></button>
+</nav>
+
+<div id="overlay" class="entry-overlay hidden"></div>
+
+<section id="entrySheet" class="entry-sheet hidden">
+  <div class="sheet-handle"></div>
+  <div class="entry-head">
+    <h3 id="entryTitle">기록 추가</h3>
+    <button id="entryCloseBtn" class="entry-close">×</button>
+  </div>
+
+  <label class="field-label">날짜</label>
+  <input id="entryDate" class="soft-input" type="date" />
+
+  <div id="mealArea">
+    <label class="field-label">구분</label>
+    <div id="mealGrid" class="category-grid"></div>
+  </div>
+
+  <label class="field-label">이름</label>
+  <input id="entryName" class="soft-input" list="foodOptions" placeholder="예: 바나나" />
+  <datalist id="foodOptions"></datalist>
+
+  <div id="qtyArea">
+    <label class="field-label">개수</label>
+    <input id="entryQty" class="soft-input" type="number" min="0.1" step="0.1" value="1" />
+  </div>
+
+  <div id="timeArea">
+    <label class="field-label">운동 시간</label>
+    <input id="entryTime" class="soft-input" type="number" placeholder="분" />
+  </div>
+
+  <label class="field-label">칼로리</label>
+  <div class="amount-wrap">
+    <input id="entryKcal" class="amount-input" type="number" placeholder="0" />
+    <span>kcal</span>
+  </div>
+
+  <button id="entrySaveBtn" class="entry-save">저장</button>
+  <button id="entryCancelBtn" class="entry-cancel">취소</button>
+</section>
+
+<section id="presetSheet" class="entry-sheet hidden">
+  <div class="sheet-handle"></div>
+  <div class="entry-head">
+    <h3 id="presetTitle">품목 추가</h3>
+    <button id="presetCloseBtn" class="entry-close">×</button>
+  </div>
+
+  <label class="field-label">품목명</label>
+  <input id="presetName" class="soft-input" placeholder="예: 바나나" />
+
+  <label class="field-label">단위</label>
+  <input id="presetUnit" class="soft-input" placeholder="예: 개, 공기, 조각" />
+
+  <label class="field-label">1단위 칼로리</label>
+  <input id="presetKcal" class="soft-input" type="number" placeholder="예: 105" />
+
+  <button id="presetSaveBtn" class="entry-save">저장</button>
+  <button id="presetCancelBtn" class="entry-cancel">취소</button>
+</section>
+
+<script type="module" src="app.js"></script>
+</body>
+</html>

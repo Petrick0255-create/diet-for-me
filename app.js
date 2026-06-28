@@ -1,768 +1,191 @@
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js";
+/* app.js
+   앱 시작점
+*/
 
 import {
-  getAuth,
-  GoogleAuthProvider,
-  signInWithPopup,
-  signOut,
-  onAuthStateChanged
-} from "https://www.gstatic.com/firebasejs/10.12.5/firebase-auth.js";
+  loadLocalState,
+  syncFromCloudIfAvailable,
+  applyCloudState,
+  forceCloudSave
+} from "./storage.js";
 
 import {
-  getFirestore,
-  doc,
-  setDoc,
-  onSnapshot
-} from "https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js";
+  listenAuth,
+  loginGoogle,
+  logoutGoogle,
+  startCloudSync,
+  stopCloudSync,
+  getCurrentUser
+} from "./firebase.js";
 
-/* Firebase 설정 */
-const firebaseConfig = {
-  apiKey: "AIzaSyBwAA3jUPVQMMR61QSAM4-z7G24u4HrAT8",
-  authDomain: "diet-for-me-a8b33.firebaseapp.com",
-  projectId: "diet-for-me-a8b33",
-  storageBucket: "diet-for-me-a8b33.firebasestorage.app",
-  messagingSenderId: "766739395332",
-  appId: "1:766739395332:web:624056073881ecb80bd651"
-};
+import {
+  initTheme,
+  toggleTheme,
+  showScreen,
+  getCurrentScreen,
+  bindTabs,
+  bindCommonButtons,
+  closeAllModals,
+  setUserStatus
+} from "./ui.js";
 
-const fbApp = initializeApp(firebaseConfig);
-const auth = getAuth(fbApp);
-const db = getFirestore(fbApp);
-const provider = new GoogleAuthProvider();
+import {
+  initProfile,
+  renderProfile,
+  renderMyFoods
+} from "./profile.js";
 
-let currentUser = null;
-let unsubscribeSync = null;
+import {
+  initAutocomplete,
+  renderFoodDatalist
+} from "./autocomplete.js";
 
-const foodPresets = [
-  ["바나나", 105, 27, 1.3, 0.3],
-  ["아보카도", 240, 13, 3, 22],
-  ["밥 한공기", 300, 65, 6, 1],
-  ["돼지갈비 1인분", 480, 15, 30, 32],
-  ["돈까스 1장", 700, 55, 28, 40],
-  ["치킨 1조각", 250, 8, 18, 16],
-  ["닭가슴살", 165, 0, 31, 3.6]
-];
+import {
+  initFood,
+  openFoodAdd,
+  renderFoodList
+} from "./food.js";
 
-const exercisePresets = [
-  ["걷기", "30분", 120],
-  ["달리기", "30분", 300],
-  ["헬스", "30분", 180],
-  ["필라테스", "1시간", 220]
-];
+import {
+  initExercise,
+  openExerciseAdd,
+  renderExerciseList
+} from "./exercise.js";
 
-const meals = ["아침", "점심", "저녁", "간식", "야식"];
+import {
+  initCalendar,
+  renderCalendar
+} from "./calendar.js";
 
-let data = JSON.parse(localStorage.getItem("foodAccountData") || "{}");
-let profile = JSON.parse(localStorage.getItem("foodAccountProfile") || "{}");
+import {
+  initStatistics,
+  renderStatistics
+} from "./statistics.js";
 
-let currentScreen = "food";
-let selectedMeal = "아침";
-let viewDate = new Date();
+document.addEventListener("DOMContentLoaded", initApp);
 
-let editMode = null;
+function initApp() {
+  loadLocalState();
 
-function today() {
-  const now = new Date();
-  const y = now.getFullYear();
-  const m = String(now.getMonth() + 1).padStart(2, "0");
-  const d = String(now.getDate()).padStart(2, "0");
-  return `${y}-${m}-${d}`;
+  initTheme();
+  bindGlobalEvents();
+
+  initProfile();
+  initAutocomplete();
+  initFood();
+  initExercise();
+  initCalendar();
+  initStatistics();
+
+  listenAuth(handleAuthChange);
+
+  renderAll();
+  showScreen("food");
 }
 
-function dateKey(y, m, d) {
-  return `${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
-}
+function bindGlobalEvents() {
+  bindTabs(() => {
+    renderAll();
+  });
 
-function getDay(date = today()) {
-  if (!data[date]) {
-    data[date] = {
-      foods: [],
-      exercises: []
-    };
-  }
+  bindCommonButtons({
+    onTheme: toggleTheme,
 
-  return data[date];
-}
+    onLogin: () => {
+      const user = getCurrentUser();
 
-async function saveData() {
-  localStorage.setItem("foodAccountData", JSON.stringify(data));
-  localStorage.setItem("foodAccountProfile", JSON.stringify(profile));
+      if (user) {
+        logoutGoogle();
+      } else {
+        loginGoogle();
+      }
+    },
 
-  if (currentUser) {
-    await setDoc(doc(db, "foodAccounts", currentUser.uid), {
-      data,
-      profile,
-      updatedAt: Date.now()
-    });
-  }
+    onFab: () => {
+      const screen = getCurrentScreen();
 
-  render();
-}
+      if (screen === "food") {
+        openFoodAdd();
+        return;
+      }
 
-function startSync(user) {
-  if (unsubscribeSync) unsubscribeSync();
+      if (screen === "exercise") {
+        openExerciseAdd();
+        return;
+      }
 
-  const ref = doc(db, "foodAccounts", user.uid);
+      if (screen === "info") {
+        document.getElementById("openFoodPresetBtn")?.click();
+      }
+    },
 
-  unsubscribeSync = onSnapshot(ref, snapshot => {
-    if (!snapshot.exists()) {
-      setDoc(ref, {
-        data,
-        profile,
-        updatedAt: Date.now()
-      });
-      return;
+    onClose: () => {
+      closeAllModals();
     }
-
-    const cloud = snapshot.data();
-
-    data = cloud.data || {};
-    profile = cloud.profile || {};
-
-    localStorage.setItem("foodAccountData", JSON.stringify(data));
-    localStorage.setItem("foodAccountProfile", JSON.stringify(profile));
-
-    loadProfile();
-    render();
   });
 }
 
-async function loginGoogle() {
-  try {
-    await signInWithPopup(auth, provider);
-  } catch (error) {
-    console.error(error);
-    alert(error.code + "\n\n" + error.message);
-  }
-}
+async function handleAuthChange(user) {
+  setUserStatus(user);
 
-async function logoutGoogle() {
-  await signOut(auth);
-}
-
-onAuthStateChanged(auth, user => {
-  currentUser = user;
-
-  const loginBtn = document.getElementById("loginBtn");
-  const userStatus = document.getElementById("userStatus");
-
-  if (user) {
-    loginBtn.textContent = "로그아웃";
-    userStatus.textContent = user.email || "구글 로그인됨";
-    startSync(user);
-  } else {
-    loginBtn.textContent = "구글 로그인";
-    userStatus.textContent = "로그인하지 않음";
-
-    if (unsubscribeSync) {
-      unsubscribeSync();
-      unsubscribeSync = null;
-    }
-  }
-});
-
-function saveProfile() {
-  const h = Number(document.getElementById("height").value);
-  const w = Number(document.getElementById("weight").value);
-  const a = Number(document.getElementById("age").value);
-  const g = document.getElementById("gender").value;
-
-  if (!h || !w || !a) {
-    alert("키, 몸무게, 나이를 입력하세요.");
+  if (!user) {
+    stopCloudSync();
+    renderAll();
     return;
   }
 
-  let bmr;
+  await syncFromCloudIfAvailable();
 
-  if (g === "male") {
-    bmr = Math.round(10 * w + 6.25 * h - 5 * a + 5);
-  } else {
-    bmr = Math.round(10 * w + 6.25 * h - 5 * a - 161);
-  }
-
-  profile = {
-    height: h,
-    weight: w,
-    age: a,
-    gender: g,
-    bmr
-  };
-
-  saveData();
-}
-
-function loadProfile() {
-  if (profile.height) document.getElementById("height").value = profile.height;
-  if (profile.weight) document.getElementById("weight").value = profile.weight;
-  if (profile.age) document.getElementById("age").value = profile.age;
-  if (profile.gender) document.getElementById("gender").value = profile.gender;
-}
-
-function updateProfileCard() {
-  const card = document.getElementById("profileCard");
-  const inputs = card.querySelector(".form-grid");
-  const saveBtn = document.getElementById("profileSaveBtn");
-  const editBtn = document.getElementById("editProfileBtn");
-
-  if (profile.bmr) {
-    inputs.classList.add("hidden");
-    saveBtn.classList.add("hidden");
-    editBtn.classList.remove("hidden");
-  } else {
-    inputs.classList.remove("hidden");
-    saveBtn.classList.remove("hidden");
-    editBtn.classList.add("hidden");
-  }
-}
-
-function showProfileEdit() {
-  const card = document.getElementById("profileCard");
-
-  card.querySelector(".form-grid").classList.remove("hidden");
-  document.getElementById("profileSaveBtn").classList.remove("hidden");
-  document.getElementById("editProfileBtn").classList.add("hidden");
-}
-
-function totals(date = today()) {
-  const d = getDay(date);
-
-  const food = d.foods.reduce((sum, item) => {
-    return sum + Number(item.kcal || 0);
-  }, 0);
-
-  const exercise = d.exercises.reduce((sum, item) => {
-    return sum + Number(item.kcal || 0);
-  }, 0);
-
-  const bmr = Number(profile.bmr || 0);
-  const balance = food - exercise - bmr;
-
-  return {
-    food,
-    exercise,
-    bmr,
-    balance
-  };
-}
-
-function showScreen(screen) {
-  currentScreen = screen;
-
-  document.querySelectorAll(".screen").forEach(el => {
-    el.classList.remove("active");
+  startCloudSync(user.uid, cloudState => {
+    applyCloudState(cloudState);
+    renderAll();
   });
 
-  document.getElementById(`screen-${screen}`).classList.add("active");
+  await forceCloudSave();
 
-  document.querySelectorAll(".tab-btn").forEach(btn => {
-    btn.classList.remove("active");
-  });
-
-  document.querySelector(`.tab-btn[data-screen="${screen}"]`).classList.add("active");
-
-  document.getElementById("fab").style.display =
-    screen === "food" || screen === "exercise" ? "block" : "none";
-
-  render();
+  renderAll();
 }
 
-function openEntry() {
-  editMode = null;
-  selectedMeal = "아침";
-
-  document.getElementById("entryOverlay").classList.remove("hidden");
-  document.getElementById("entrySheet").classList.remove("hidden");
-
-  document.getElementById("entryDate").value = today();
-  document.getElementById("entryName").value = "";
-  document.getElementById("entryKcal").value = "";
-  document.getElementById("entryTime").value = "";
-
-  if (currentScreen === "food") {
-    document.getElementById("entryTitle").textContent = "먹은 거 추가";
-    document.getElementById("mealLabel").textContent = "구분";
-
-    document.getElementById("timeLabel").classList.add("hidden");
-    document.getElementById("entryTime").classList.add("hidden");
-
-    renderMealChips();
-  }
-
-  if (currentScreen === "exercise") {
-    document.getElementById("entryTitle").textContent = "운동 추가";
-    document.getElementById("mealLabel").textContent = "운동";
-
-    document.getElementById("timeLabel").classList.remove("hidden");
-    document.getElementById("entryTime").classList.remove("hidden");
-
-    document.getElementById("mealGrid").innerHTML = "";
-  }
-}
-
-function closeEntry() {
-  document.getElementById("entryOverlay").classList.add("hidden");
-  document.getElementById("entrySheet").classList.add("hidden");
-  editMode = null;
-}
-
-function renderMealChips() {
-  const grid = document.getElementById("mealGrid");
-
-  grid.innerHTML = meals.map(meal => `
-    <button
-      class="category-chip ${meal === selectedMeal ? "active" : ""}"
-      data-meal="${meal}"
-    >
-      ${meal}
-    </button>
-  `).join("");
-
-  document.querySelectorAll(".category-chip").forEach(btn => {
-    btn.addEventListener("click", () => {
-      selectedMeal = btn.dataset.meal;
-      renderMealChips();
-    });
-  });
-}
-
-function editFood(index) {
-  const item = getDay().foods[index];
-
-  editMode = {
-    type: "food",
-    index,
-    originalDate: today()
-  };
-
-  currentScreen = "food";
-  selectedMeal = item.meal;
-
-  document.getElementById("entryOverlay").classList.remove("hidden");
-  document.getElementById("entrySheet").classList.remove("hidden");
-
-  document.getElementById("entryTitle").textContent = "먹은 거 수정";
-  document.getElementById("entryDate").value = today();
-  document.getElementById("entryName").value = item.name;
-  document.getElementById("entryKcal").value = item.kcal;
-  document.getElementById("entryTime").value = "";
-
-  document.getElementById("timeLabel").classList.add("hidden");
-  document.getElementById("entryTime").classList.add("hidden");
-
-  renderMealChips();
-}
-
-function editExercise(index) {
-  const item = getDay().exercises[index];
-
-  editMode = {
-    type: "exercise",
-    index,
-    originalDate: today()
-  };
-
-  currentScreen = "exercise";
-
-  document.getElementById("entryOverlay").classList.remove("hidden");
-  document.getElementById("entrySheet").classList.remove("hidden");
-
-  document.getElementById("entryTitle").textContent = "운동 수정";
-  document.getElementById("entryDate").value = today();
-  document.getElementById("entryName").value = item.name;
-  document.getElementById("entryKcal").value = item.kcal;
-  document.getElementById("entryTime").value = item.min || 0;
-
-  document.getElementById("timeLabel").classList.remove("hidden");
-  document.getElementById("entryTime").classList.remove("hidden");
-  document.getElementById("mealGrid").innerHTML = "";
-}
-
-function saveEntry() {
-  const date = document.getElementById("entryDate").value || today();
-  const name = document.getElementById("entryName").value.trim();
-  const kcal = Number(document.getElementById("entryKcal").value);
-  const time = Number(document.getElementById("entryTime").value);
-
-  if (!name || !kcal) {
-    alert("이름과 칼로리를 입력하세요.");
-    return;
-  }
-
-  const d = getDay(date);
-
-  if (editMode) {
-    if (editMode.type === "food") {
-      d.foods[editMode.index] = {
-        meal: selectedMeal,
-        name,
-        kcal
-      };
-    }
-
-    if (editMode.type === "exercise") {
-      d.exercises[editMode.index] = {
-        name,
-        min: time || 0,
-        kcal
-      };
-    }
-
-    editMode = null;
-  } else {
-    if (currentScreen === "food") {
-      d.foods.push({
-        meal: selectedMeal,
-        name,
-        kcal
-      });
-    }
-
-    if (currentScreen === "exercise") {
-      d.exercises.push({
-        name,
-        min: time || 0,
-        kcal
-      });
-    }
-  }
-
-  closeEntry();
-  saveData();
-}
-
-function removeFood(index) {
-  if (!confirm("정말 삭제할까요?")) return;
-  getDay().foods.splice(index, 1);
-  saveData();
-}
-
-function removeExercise(index) {
-  if (!confirm("정말 삭제할까요?")) return;
-  getDay().exercises.splice(index, 1);
-  saveData();
-}
-
-function renderFoodList() {
-  const d = getDay();
-  const list = document.getElementById("foodList");
-
-  if (d.foods.length === 0) {
-    list.innerHTML = `<div class="empty">아직 입력한 음식이 없습니다.</div>`;
-    return;
-  }
-
-  list.innerHTML = d.foods.map((item, index) => `
-    <div class="list-item">
-      <div>
-        <div class="item-main">${item.meal} · ${item.name}</div>
-        <div class="item-sub">섭취 기록</div>
-      </div>
-      <div class="item-money plus">${item.kcal} kcal</div>
-      <button class="more-btn" data-food-menu="${index}">⋯</button>
-    </div>
-  `).join("");
-
-  document.querySelectorAll("[data-food-menu]").forEach(btn => {
-    btn.addEventListener("click", () => {
-      const index = Number(btn.dataset.foodMenu);
-      const action = prompt("수정은 1, 삭제는 2를 입력하세요.", "1");
-
-      if (action === "1") editFood(index);
-      if (action === "2") removeFood(index);
-    });
-  });
-}
-
-function renderExerciseList() {
-  const d = getDay();
-  const list = document.getElementById("exerciseList");
-
-  if (d.exercises.length === 0) {
-    list.innerHTML = `<div class="empty">아직 입력한 운동이 없습니다.</div>`;
-    return;
-  }
-
-  list.innerHTML = d.exercises.map((item, index) => `
-    <div class="list-item">
-      <div>
-        <div class="item-main">${item.name}</div>
-        <div class="item-sub">${item.min || 0}분 운동</div>
-      </div>
-      <div class="item-money minus">-${item.kcal} kcal</div>
-      <button class="more-btn" data-exercise-menu="${index}">⋯</button>
-    </div>
-  `).join("");
-
-  document.querySelectorAll("[data-exercise-menu]").forEach(btn => {
-    btn.addEventListener("click", () => {
-      const index = Number(btn.dataset.exerciseMenu);
-      const action = prompt("수정은 1, 삭제는 2를 입력하세요.", "1");
-
-      if (action === "1") editExercise(index);
-      if (action === "2") removeExercise(index);
-    });
-  });
-}
-
-function renderPresetTables() {
-  document.getElementById("foodPresetTable").innerHTML = foodPresets.map(item => `
-    <tr>
-      <td>${item[0]}</td>
-      <td>${item[1]}</td>
-      <td>${item[2]}g</td>
-      <td>${item[3]}g</td>
-      <td>${item[4]}g</td>
-    </tr>
-  `).join("");
-
-  document.getElementById("exercisePresetTable").innerHTML = exercisePresets.map(item => `
-    <tr>
-      <td>${item[0]}</td>
-      <td>${item[1]}</td>
-      <td>${item[2]}</td>
-    </tr>
-  `).join("");
-}
-
-function changeMonth(diff) {
-  viewDate.setMonth(viewDate.getMonth() + diff);
-  renderCalendar();
-  renderStats();
-}
-
-function renderCalendar() {
-  const y = viewDate.getFullYear();
-  const m = viewDate.getMonth() + 1;
-
-  document.getElementById("monthLabel").textContent = `${y}년 ${m}월`;
-
-  const first = new Date(y, m - 1, 1);
-  const last = new Date(y, m, 0).getDate();
-  const startDay = first.getDay();
-
-  let html = ["일", "월", "화", "수", "목", "금", "토"]
-    .map(day => `<div class="day-name">${day}</div>`)
-    .join("");
-
-  for (let i = 0; i < startDay; i++) {
-    html += `<div class="calendar-day blank"></div>`;
-  }
-
-  for (let d = 1; d <= last; d++) {
-    const key = dateKey(y, m, d);
-    const t = totals(key);
-    const sign = t.balance > 0 ? "+" : "";
-    const cls = t.balance > 0 ? "day-plus" : "day-minus";
-
-    html += `
-      <button class="calendar-day" data-detail-date="${key}">
-        <div class="day-num">${d}</div>
-        <div class="day-money ${cls}">${sign}${t.balance}</div>
-        <div class="day-money">${t.food}kcal</div>
-      </button>
-    `;
-  }
-
-  document.getElementById("calendarGrid").innerHTML = html;
-
-  document.querySelectorAll("[data-detail-date]").forEach(btn => {
-    btn.addEventListener("click", () => {
-      showDayDetail(btn.dataset.detailDate);
-    });
-  });
-}
-
-function showDayDetail(date) {
-  const d = getDay(date);
-  const t = totals(date);
-
-  document.getElementById("dayDetail").innerHTML = `
-    <div class="stat-row">
-      <span>${date}</span>
-      <strong class="${t.balance > 0 ? "minus" : "plus"}">
-        ${t.balance > 0 ? "+" : ""}${t.balance} kcal
-      </strong>
-    </div>
-
-    <div class="stat-row">
-      <span>먹은 칼로리</span>
-      <strong>${t.food} kcal</strong>
-    </div>
-
-    <div class="stat-row">
-      <span>운동 칼로리</span>
-      <strong>${t.exercise} kcal</strong>
-    </div>
-
-    <div class="stat-row">
-      <span>기초대사량</span>
-      <strong>${t.bmr} kcal</strong>
-    </div>
-
-    <br>
-
-    <div class="card-title">먹은 것</div>
-    ${
-      d.foods.length
-        ? d.foods.map(item => `
-          <div class="list-item">
-            <div>
-              <div class="item-main">${item.meal} · ${item.name}</div>
-              <div class="item-sub">섭취 기록</div>
-            </div>
-            <div class="item-money plus">${item.kcal} kcal</div>
-            <div></div>
-          </div>
-        `).join("")
-        : `<div class="empty">먹은 기록 없음</div>`
-    }
-
-    <br>
-
-    <div class="card-title">운동</div>
-    ${
-      d.exercises.length
-        ? d.exercises.map(item => `
-          <div class="list-item">
-            <div>
-              <div class="item-main">${item.name}</div>
-              <div class="item-sub">${item.min || 0}분 운동</div>
-            </div>
-            <div class="item-money minus">-${item.kcal} kcal</div>
-            <div></div>
-          </div>
-        `).join("")
-        : `<div class="empty">운동 기록 없음</div>`
-    }
-  `;
-}
-
-function renderStats() {
-  const y = viewDate.getFullYear();
-  const m = viewDate.getMonth() + 1;
-  const last = new Date(y, m, 0).getDate();
-
-  let food = 0;
-  let exercise = 0;
-  let bmr = 0;
-  let balance = 0;
-
-  for (let d = 1; d <= last; d++) {
-    const key = dateKey(y, m, d);
-    const t = totals(key);
-
-    food += t.food;
-    exercise += t.exercise;
-    bmr += t.bmr;
-    balance += t.balance;
-  }
-
-  let label = "유지 중";
-  let cls = "plus";
-
-  if (balance > 1000) {
-    label = "찌는 중";
-    cls = "minus";
-  }
-
-  if (balance < -1000) {
-    label = "빠지는 중";
-    cls = "plus";
-  }
-
-  document.getElementById("statResult").innerHTML = `
-    <div class="stat-big ${cls}">${label}</div>
-
-    <div class="stat-row">
-      <span>이번 달 섭취</span>
-      <strong>${food} kcal</strong>
-    </div>
-
-    <div class="stat-row">
-      <span>이번 달 운동</span>
-      <strong>${exercise} kcal</strong>
-    </div>
-
-    <div class="stat-row">
-      <span>이번 달 기초대사량 합계</span>
-      <strong>${bmr} kcal</strong>
-    </div>
-
-    <div class="stat-row">
-      <span>이번 달 최종 결과</span>
-      <strong class="${balance > 0 ? "minus" : "plus"}">
-        ${balance > 0 ? "+" : ""}${balance} kcal
-      </strong>
-    </div>
-  `;
-}
-
-function toggleTheme() {
-  document.body.classList.toggle("light");
-
-  const isLight = document.body.classList.contains("light");
-  localStorage.setItem("foodAccountTheme", isLight ? "light" : "dark");
-
-  document.getElementById("themeBtn").textContent = isLight ? "🌙" : "☀️";
-}
-
-function loadTheme() {
-  const theme = localStorage.getItem("foodAccountTheme");
-
-  if (theme === "light") {
-    document.body.classList.add("light");
-    document.getElementById("themeBtn").textContent = "🌙";
-  } else {
-    document.getElementById("themeBtn").textContent = "☀️";
-  }
-}
-
-function render() {
-  document.getElementById("bmrText").textContent = profile.bmr ? profile.bmr : "-";
-
-  const t = totals();
-
-  document.getElementById("todayFood").textContent = t.food;
-  document.getElementById("todayBalance").textContent =
-    `${t.balance > 0 ? "+" : ""}${t.balance}`;
+function renderAll() {
+  renderProfile();
+  renderMyFoods();
+  renderFoodDatalist();
 
   renderFoodList();
   renderExerciseList();
-  renderPresetTables();
   renderCalendar();
-  renderStats();
-  updateProfileCard();
+  renderStatistics();
+
+  renderTodayHero();
 }
 
-function bindEvents() {
-  document.getElementById("themeBtn").addEventListener("click", toggleTheme);
+function renderTodayHero() {
+  const hero = document.getElementById("todaySummary");
+  const balanceEl = document.getElementById("todayBalance");
 
-  document.getElementById("loginBtn").addEventListener("click", () => {
-    if (currentUser) logoutGoogle();
-    else loginGoogle();
-  });
+  if (!hero || !balanceEl) return;
 
-  document.getElementById("profileSaveBtn").addEventListener("click", saveProfile);
-  document.getElementById("editProfileBtn").addEventListener("click", showProfileEdit);
+  import("./storage.js").then(({ getState }) => {
+    import("./data.js").then(({ todayKey, getDayRecord, getDailyTarget }) => {
+      const state = getState();
+      const day = getDayRecord(state, todayKey());
 
-  document.getElementById("fab").addEventListener("click", openEntry);
+      const food = day.foods.reduce((sum, item) => {
+        return sum + Number(item.kcal || 0);
+      }, 0);
 
-  document.getElementById("entryOverlay").addEventListener("click", closeEntry);
-  document.getElementById("entryCloseBtn").addEventListener("click", closeEntry);
-  document.getElementById("entryCancelBtn").addEventListener("click", closeEntry);
-  document.getElementById("entrySaveBtn").addEventListener("click", saveEntry);
+      const exercise = day.exercises.reduce((sum, item) => {
+        return sum + Number(item.kcal || 0);
+      }, 0);
 
-  document.getElementById("prevMonthBtn").addEventListener("click", () => changeMonth(-1));
-  document.getElementById("nextMonthBtn").addEventListener("click", () => changeMonth(1));
+      const target = getDailyTarget(state.profile);
+      const balance = food - exercise - target;
 
-  document.querySelectorAll(".tab-btn").forEach(btn => {
-    btn.addEventListener("click", () => {
-      showScreen(btn.dataset.screen);
+      balanceEl.textContent = `${balance > 0 ? "+" : ""}${balance.toLocaleString()} kcal`;
+      balanceEl.className = `hero-value ${balance > 0 ? "minus" : "plus"}`;
+
+      hero.textContent =
+        `섭취 ${food.toLocaleString()} · 운동 ${exercise.toLocaleString()} · 기준 ${target.toLocaleString()}`;
     });
   });
 }
-
-bindEvents();
-loadTheme();
-loadProfile();
-render();

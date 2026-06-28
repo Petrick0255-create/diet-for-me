@@ -3,17 +3,22 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
   <title>먹는 가계부</title>
+
   <link rel="stylesheet" href="style.css" />
 </head>
+
 <body>
 
 <div class="app">
+
   <header class="top-header">
     <div>
       <div class="page-title">먹는 가계부</div>
       <div class="user-email" id="userStatus">로그인하지 않음</div>
     </div>
+
     <div class="header-actions">
       <button id="themeBtn" class="icon-btn">☀️</button>
       <button id="loginBtn" class="logout-btn">구글 로그인</button>
@@ -77,6 +82,7 @@
         <input id="height" class="soft-input" type="number" placeholder="키 cm" />
         <input id="weight" class="soft-input" type="number" placeholder="몸무게 kg" />
         <input id="age" class="soft-input" type="number" placeholder="나이" />
+
         <select id="gender" class="soft-input">
           <option value="male">남성</option>
           <option value="female">여성</option>
@@ -94,6 +100,7 @@
           <span>기초대사량</span>
           <strong id="bmrText">-</strong>
         </div>
+
         <div class="summary-box">
           <span>일일 대사량</span>
           <strong id="dailyText">-</strong>
@@ -107,22 +114,43 @@
       <div id="presetList"></div>
     </div>
   </section>
+
 </div>
 
 <button id="fab" class="fab">+</button>
 
 <nav class="bottom-nav">
-  <button class="tab-btn active" data-tab="food"><span>🍚</span><em>먹은 거</em></button>
-  <button class="tab-btn" data-tab="exercise"><span>🏃</span><em>운동</em></button>
-  <button class="tab-btn" data-tab="month"><span>📅</span><em>월별</em></button>
-  <button class="tab-btn" data-tab="stat"><span>📊</span><em>통계</em></button>
-  <button class="tab-btn" data-tab="info"><span>⚙️</span><em>정보</em></button>
+  <button class="tab-btn active" data-tab="food">
+    <span>🍚</span>
+    <em>먹은 거</em>
+  </button>
+
+  <button class="tab-btn" data-tab="exercise">
+    <span>🏃</span>
+    <em>운동</em>
+  </button>
+
+  <button class="tab-btn" data-tab="month">
+    <span>📅</span>
+    <em>월별</em>
+  </button>
+
+  <button class="tab-btn" data-tab="stat">
+    <span>📊</span>
+    <em>통계</em>
+  </button>
+
+  <button class="tab-btn" data-tab="info">
+    <span>⚙️</span>
+    <em>정보</em>
+  </button>
 </nav>
 
 <div id="overlay" class="entry-overlay hidden"></div>
 
 <section id="entrySheet" class="entry-sheet hidden">
   <div class="sheet-handle"></div>
+
   <div class="entry-head">
     <h3 id="entryTitle">기록 추가</h3>
     <button id="entryCloseBtn" class="entry-close">×</button>
@@ -162,6 +190,7 @@
 
 <section id="presetSheet" class="entry-sheet hidden">
   <div class="sheet-handle"></div>
+
   <div class="entry-head">
     <h3 id="presetTitle">품목 추가</h3>
     <button id="presetCloseBtn" class="entry-close">×</button>
@@ -181,5 +210,6 @@
 </section>
 
 <script type="module" src="app.js"></script>
+
 </body>
 </html>

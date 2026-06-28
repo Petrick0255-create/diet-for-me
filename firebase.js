@@ -1,7 +1,3 @@
-/* firebase.js
-   Firebase 로그인 / Firestore 동기화 담당
-*/
-
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js";
 
 import {
@@ -15,9 +11,8 @@ import {
 import {
   getFirestore,
   doc,
-  setDoc,
   getDoc,
-  onSnapshot
+  setDoc
 } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js";
 
 const firebaseConfig = {
@@ -30,83 +25,39 @@ const firebaseConfig = {
 };
 
 const app = initializeApp(firebaseConfig);
-const auth = getAuth(app);
-const db = getFirestore(app);
-const provider = new GoogleAuthProvider();
 
-let currentUser = null;
-let unsubscribeSnapshot = null;
+export const auth = getAuth(app);
+export const db = getFirestore(app);
+export const provider = new GoogleAuthProvider();
 
-export function getCurrentUser() {
-  return currentUser;
+export function authListener(callback) {
+  return onAuthStateChanged(auth, callback);
 }
 
-export function listenAuth(callback) {
-  return onAuthStateChanged(auth, user => {
-    currentUser = user;
-    callback(user);
-  });
-}
-
-export async function loginGoogle() {
+export async function googleLogin() {
   try {
-    await signInWithPopup(auth, provider);
+    return await signInWithPopup(auth, provider);
   } catch (error) {
     console.error(error);
     alert(error.code + "\n\n" + error.message);
+    throw error;
   }
 }
 
-export async function logoutGoogle() {
-  await signOut(auth);
+export async function googleLogout() {
+  return await signOut(auth);
 }
 
-export function getUserDocRef(userId) {
-  return doc(db, "foodAccounts", userId);
+export async function saveUserData(uid, data) {
+  return await setDoc(doc(db, "foodAccount", uid), data);
 }
 
-export async function loadCloudState(userId) {
-  const ref = getUserDocRef(userId);
-  const snap = await getDoc(ref);
+export async function loadUserData(uid) {
+  const snap = await getDoc(doc(db, "foodAccount", uid));
 
-  if (!snap.exists()) return null;
-
-  return snap.data().state || null;
-}
-
-export async function saveCloudState(userId, state) {
-  const ref = getUserDocRef(userId);
-
-  await setDoc(ref, {
-    state,
-    updatedAt: Date.now()
-  });
-}
-
-export function startCloudSync(userId, onStateLoaded) {
-  if (unsubscribeSnapshot) {
-    unsubscribeSnapshot();
-    unsubscribeSnapshot = null;
+  if (snap.exists()) {
+    return snap.data();
   }
 
-  const ref = getUserDocRef(userId);
-
-  unsubscribeSnapshot = onSnapshot(ref, snap => {
-    if (!snap.exists()) return;
-
-    const cloud = snap.data();
-
-    if (cloud.state) {
-      onStateLoaded(cloud.state);
-    }
-  });
-
-  return unsubscribeSnapshot;
-}
-
-export function stopCloudSync() {
-  if (unsubscribeSnapshot) {
-    unsubscribeSnapshot();
-    unsubscribeSnapshot = null;
-  }
+  return null;
 }
